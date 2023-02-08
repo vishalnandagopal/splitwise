@@ -10,6 +10,7 @@ __pycache__/
 .mypy_cache/
 .vscode/
 log/
+flask_session/
 
 # Taken from https://github.com/github/gitignore/blob/main/Python.gitignore
 

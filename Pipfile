@@ -10,7 +10,8 @@ gunicorn = "*"
 flask-session = "==0.4.0"
 colorama = "*"
 python-dotenv = "*"
-icecream = "*"
+icecream = "*"  
+werkzeug = "*"
 
 [dev-packages]
 black = "*"
