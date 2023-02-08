@@ -62,8 +62,21 @@ def generate_uniq_id(type: str = "transaction") -> str:
 
 
 def log_and_print(msg: str, level: str = "warn") -> None:
-    log_to_file: Optional[str] = getenv("KEEP_A_LOG")
+    """
+    This function can be used for printing an error message, as well as for logging it by passing the level to the level parameter.
+
+    This function looks for the env variable `KEEP_A_LOG`, to check whether it should keep logs to the file.
+
+    Printing always happens, irrespective of the value of `KEEP_A_LOG`.
+
+    #### Parameters
+        `msg` - The message to print/log.
+        `
+    """
     print(msg)
+
+    log_to_file: Optional[str] = getenv("KEEP_A_LOG")
+
     if str(log_to_file).casefold() not in ("false", "no", "none"):
         if level == "warn":
             logger.warning(msg)
@@ -78,13 +91,13 @@ def log_and_print(msg: str, level: str = "warn") -> None:
 class TransactionLog:
     """
     Any transaction can be recorded using this class. Every payment is an object of the TransactionLog, and it has the following attributes.
-
-    `debited_from`: An object of the `Member` class, who gave the money.
-    `credited_to`: An object of the `member` class, who received the money.
-    `amount`: The amount that was paid.
-    `currency_prefix`: The currency the transaction was made in.
-    If the Transaction was made in a group of the type `SplitwiseGroup`, these additional attributes can be provided
-    `group_name`
+    #### Parameters
+        `debited_from`: An object of the `Member` class, who gave the money.
+        `credited_to`: An object of the `member` class, who received the money.
+        `amount`: The amount that was paid.
+        `currency_prefix`: The currency the transaction was made in.
+    If the Transaction was made in a group of the type `SplitwiseGroup`, then a group argument can also be provided.
+        `group` - The SplitwiseGroup object in which the transaction was made.
     """
 
     def __init__(
@@ -116,22 +129,40 @@ class TransactionLog:
             if self.group_name
             else f"{self.debited_from.name} paid {self.currency}{self.amount} to {self.credited_to.name}"
         )
+        return string_repr
+
+    def __repr__(self) -> str:
+        string_repr = (
+            f'{self.debited_from.name} paid {self.currency}{self.amount} to {self.credited_to.name} in the group "{self.group_name}."'
+            if self.group_name
+            else f"{self.debited_from.name} paid {self.currency}{self.amount} to {self.credited_to.name}"
+        )
         if self.prev:
             string_repr += f" Prev transaction is {self.prev.unique_id}."
         if self.next:
             string_repr += f" Next transaction is {self.next.unique_id}."
         return string_repr
 
-    def __repr__(self) -> str:
-        return str(self)
-
     def recursive_print(self) -> None:
-        print(
-            f"{self.debited_from.name} paid {self.currency}{self.amount} to {self.credited_to.name}",
-            end="  ->  ",
-        )
-        if self.next and self.next != self:
-            self.next.recursive_print()
+        # arrow = """   ----
+        # |
+        # |
+        # ---
+        # """
+        arrow = """
+            |
+            ↓\n"""
+        _ = self.next
+        while _:
+            print(
+                str(_),
+                end=arrow,
+            )
+            if _.next:
+                _ = _.next
+            else:
+                break
+        print(str(_))
 
 
 class DebtList:
@@ -402,7 +433,11 @@ class SplitwiseGroup:
                 if member_who_received_money not in self.members
                 else member_who_gave_money
             )
-            other_member = member_who_gave_money if non_member == member_who_received_money else member_who_received_money
+            other_member = (
+                member_who_gave_money
+                if non_member == member_who_received_money
+                else member_who_received_money
+            )
             log_and_print(
                 f'{non_member.name} is not in the spltiwise group. Please make a transaction between {non_member.name} and {other_member.name} outside of this group "{self.name}", or add {non_member.name} to this group.'
             )
