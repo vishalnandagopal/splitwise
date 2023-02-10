@@ -48,17 +48,26 @@ else:
 
 
 def generate_uniq_id(type: str = "transaction") -> str:
-    if type.casefold() == "member":
+    """
+    Generate a random UUID (using UUID.uuid4()) and add a prefix to the string representation of the UUID based on what the UUID it is being generated for.
+
+    Eg: If type is 'member', it adds the prefix 'mb' to the uuid and returns it.
+
+    #### Parameters:
+        `type`: 'transaction' | 'member' | 'group' | 'dlist' | 'group-dlist' | Any string
+    """
+
+    if type.casefold() == "transaction":
+        return "tr-" + str(uuid4())
+    elif type.casefold() == "member":
         return "mb-" + str(uuid4())
     elif type.casefold() == "group":
         return "gr-" + str(uuid4())
-    elif type.casefold() == "transaction":
-        return "tr-" + str(uuid4())
     elif type.casefold() == "dlist":
         return "dl-" + str(uuid4())
     elif type.casefold() == "group-dlist":
         return "gd-" + str(uuid4())
-    return "o-" + str(uuid4())
+    return "ot-" + str(uuid4())
 
 
 def log_and_print(msg: str, level: str = "warn") -> None:
@@ -86,6 +95,19 @@ def log_and_print(msg: str, level: str = "warn") -> None:
             logger.info(msg)
         else:
             logger.debug(msg)
+
+
+def determine_currency_prefix(members: list[Member] | tuple[Member, ...]) -> str:
+    """Calculates a currency prefix when given a list/tuple of `Member` objects, based on what the most frequent currency prefix is among all members is."""
+    preferred_currencies: list[str] = [
+        member.preferred_currency_prefix_member for member in members
+    ]
+    preferred_currency_prefix_group: str
+    if preferred_currencies:
+        preferred_currency_prefix_group = max(preferred_currencies)
+    else:
+        preferred_currency_prefix_group = default_currency_prefix
+    return preferred_currency_prefix_group
 
 
 class TransactionLog:
@@ -210,7 +232,7 @@ class DebtList:
         if net_debt > 0:
             string_repr += f"\n   {self.name} gets back {net_debt} in total."
         elif net_debt < 0:
-            string_repr += f"\n   {self.name} has to pay {-net_debt} in total."
+            string_repr += f"\n   {self.name} owes {-net_debt} in total."
         else:
             string_repr += f"\n   {self.name} has a net debt is 0. Congrats!"
         return string_repr
@@ -312,7 +334,10 @@ class GroupDebtList:
 
 class Member:
     def __init__(
-        self, name: str, preferred_currency_prefix: str = default_currency_prefix
+        self,
+        name: str,
+        preferred_currency_prefix: str = default_currency_prefix,
+        upi_id: Optional[str] = None,
     ):
         self.name: str = name
         self.uniq_id_member: str = generate_uniq_id(type="member")
@@ -323,6 +348,7 @@ class Member:
         )
         self.first_non_group_transaction: Optional[TransactionLog] = None
         self.last_non_group_transaction: TransactionLog
+        self.upi_id: Optional[str] = upi_id
 
     def non_group_transaction(
         self,
@@ -371,22 +397,18 @@ class SplitwiseGroup:
             member.groups.add(self)
         self.first_non_group_transaction: Optional[TransactionLog] = None
         self.last_non_group_transaction: TransactionLog
-        self.determine_currency_prefix()
-
-    def determine_currency_prefix(self):
-        preferred_currencies = [
-            member.preferred_currency_prefix_member for member in self.members
-        ]
-        if preferred_currencies:
-            self.preferred_currency_prefix_group = max(preferred_currencies)
-        else:
-            self.preferred_currency_prefix_group = default_currency_prefix
+        self.preferred_currency_prefix_group = determine_currency_prefix(self.members)
 
     def add_member(self, person: Member | list[Member] | tuple[Member, ...]):
+        """
+        Add a `Member` or a list/tuple of `Member` objects as additional members to the `SplitwiseGroup`.
+        #### Parameters:
+            `person`: Member | list[Member] | tuple[Member, ...]
+        """
         if isinstance(person, Member):
             self.members.append(person)
         elif isinstance(person, (list, tuple)):
-            self.members = self.members + list(person)
+            self.members += list(person)
         else:
             log_and_print(
                 "Can add only members from a list, tuple when given a single Member object."
@@ -398,6 +420,13 @@ class SplitwiseGroup:
         member_who_received_money: Member,
         amount: int,
     ) -> bool:
+        """
+        Make a transaction in a `SplitwiseGroup`.
+        #### Parameters
+            `member_who_gave_money`: The person who lent the money.
+            `member_who_received_money`: The person who received the money.
+            `amount`: The amount involved in this transaction (preferably should be positive, but should also work with negative)
+        """
         if not self.first_non_group_transaction:
             self.first_non_group_transaction = TransactionLog(
                 member_who_gave_money,
@@ -444,10 +473,56 @@ class SplitwiseGroup:
             return False
 
     def print_settlements(self) -> None:
-        transactions_needed_to_settle: list[str] = []
+        """
+        Prints a way to settle all debts by showing how members can pay each other, similar to a format used by Splitwise. It calculates money lent and owed by calling the `calculate_settlements()` function `self.group_debts`, a GroupDebtList, and then for each Transaction that is part of the possible settlement, it formats it in a way similar to users of Splitwise and then prints it.
+
+        This function also contains a member_payments class that handles all formating and calculation while printing.
+        """
         settlements: list[TransactionLog] = self.group_debts.calculate_settlements()
+
+        class MemberPayments:
+            """
+            A class used to calculate and represent the settlements needed to be done in a group.
+            #### Paremeters:
+                `settlements`: A list of `TransactionLog` objects.
+            """
+
+            def __init__(self, settlements: list[TransactionLog]):
+                if settlements:
+                    self.members: list[Member] = [
+                        transaction.credited_to for transaction in settlements
+                    ] + [transaction.debited_from for transaction in settlements]
+
+                    self.member_payments: dict[Member, dict[Member, int]] = {
+                        member: {} for member in self.members
+                    }
+
+                    for transaction in settlements:
+                        # print(f"    {transaction.debited_from.name} owes {transaction.currency}{transaction.amount} to {transaction.credited_to.name}")
+                        self.member_payments[transaction.credited_to][
+                            transaction.debited_from
+                        ] = transaction.amount
+                        self.member_payments[transaction.debited_from][
+                            transaction.credited_to
+                        ] = -transaction.amount
+                    self.preferred_currency: str = determine_currency_prefix(
+                        self.members
+                    )
+
+            def __str__(self) -> str:
+                string_repr: str = ""
+
+                for member in self.member_payments:
+                    if sum(self.member_payments[member].values()) > 0:
+                        string_repr += f"\n{member.name} gets {Fore.GREEN}{self.preferred_currency}{sum(self.member_payments[member].values())}{Fore.RESET}\n"
+                    else:
+                        string_repr += f"\n{member.name} owes {Fore.RED}{self.preferred_currency}{sum(self.member_payments[member].values())}{Fore.RESET}\n"
+                    for _ in self.member_payments[member]:
+                        if self.member_payments[member][_] > 0:
+                            string_repr += f"  {Fore.GREEN}++ {self.preferred_currency}{self.member_payments[member][_]}{Fore.RESET} from {_.name}\n"
+                        else:
+                            string_repr += f"  {Fore.RED}-- {self.preferred_currency}{-self.member_payments[member][_]}{Fore.RESET} to {_.name}\n"
+                return string_repr
+
         print(f'The settlements to clear all debts in the group "{self.name}" are:')
-        for transaction in settlements:
-            print(
-                f"    {transaction.debited_from.name} can pay {transaction.currency}{transaction.amount} to {transaction.credited_to.name}"
-            )
+        print(MemberPayments(settlements))

@@ -25,12 +25,12 @@ for member in members[1:]:
 group = SplitwiseGroup("Hyd homies", members)
 
 group.transaction(v, j, random.randint(1, 1000))
-group.transaction(v, j, random.randint(1, 1000))
 group.transaction(x, v, random.randint(1, 1000))
-group.transaction(v, k, random.randint(20, 200))
+group.transaction(v, x, random.randint(1, 1000))
+group.transaction(x, j, random.randint(1, 1000))
 
 
 if group.first_non_group_transaction:
-    print("-------------------------")
     group.first_non_group_transaction.recursive_print()
+    print()
     group.print_settlements()
