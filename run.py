@@ -33,4 +33,4 @@ group.transaction(x, j, random.randint(1, 1000))
 if group.first_non_group_transaction:
     group.first_non_group_transaction.recursive_print()
     print()
-    group.print_settlements()
+    print(group.get_settlements())
