@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "splitwise"
+version = "1.0.0"
+description = "attempt at implementing the logic for basic features of [Splitwise](https://www.splitwise.com/) in Python, including settling transactions and [\"simplify debts\"](https://blog.splitwise.com/2012/09/14/debts-made-simple/) ([video](https://www.youtube.com/watch?v=R2CBrFq9KAI))."
+authors = ["Vishal N <dev@vishalnandagopal.com>"]
+license = "GNU GPL 3.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+flask = "^3.0.0"
+flask-session = "^0.5.0"
+colorama = "^0.4.6"
+python-dotenv = "^1.0.0"
+icecream = "^2.1.3"
+werkzeug = "^3.0.1"
+mypy = "^1.7.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
